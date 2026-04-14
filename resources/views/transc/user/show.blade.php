@@ -29,7 +29,7 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <label class="form-control-label">Area</label>
-                                    <input class="form-control" type="text" value="{{ $list->area_id ?? '' }}" disabled>
+                                    <input class="form-control" type="text" value="{{ $list->nama_area ?? '' }}" disabled>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-control-label">Jenis Pelaksana</label>

@@ -18,7 +18,9 @@ use App\Http\Controllers\LoginController;
 use App\Http\Controllers\HrdController;
 use App\Http\Controllers\HeadController;
 use App\Http\Controllers\DailyLogController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\WorkScheduleController;
+use App\Http\Controllers\UserController;
 use App\Services\Auth\HomeRedirectService;
 
 Route::get('/', function () {
@@ -49,6 +51,9 @@ Route::group(['middleware' => 'auth'], function () {
 	Route::post('/periodic-schedule/destroy', [WorkScheduleController::class, 'destroy'])->name('periodic-schedule.destroy');
 	Route::post('/periodic-schedule/bulk-save', [WorkScheduleController::class, 'bulkSavePeriodic'])->name('periodic-schedule.bulk-save');
 	Route::post('/periodic-schedule/detail-delete', [WorkScheduleController::class, 'deletePeriodicDetail'])->name('periodic-schedule.detail-delete');
+	Route::post('/user/draft/confirm', [UserController::class, 'confirmDraft'])->name('user.draft.confirm');
+	Route::post('/user/draft/delete', [UserController::class, 'deleteDraft'])->name('user.draft.delete');
+	Route::get('/report/{dmenu}/excel-images', [ReportController::class, 'exportExcelImages'])->name('report.excel-images');
 	Route::get('/{page}', [PageController::class, 'index'])->name(''); //route list
 	Route::post('/{page}', [PageController::class, 'index'])->name(''); //route store
 	Route::get('/{page}/{action}', [PageController::class, 'index'])->name(''); //route show, add, edit

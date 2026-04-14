@@ -21,40 +21,68 @@ class tabel_rpt_pemeliharaan extends Seeder
             'field' => 'query',
             'type' => 'report',
             'query' => "SELECT
-                a.nama_area AS Area,
-                p.job_description AS Pekerjaan,
-                CONCAT(d.periode, ' / ', d.cycle, 'x') AS Periodik,
-                DATE_FORMAT(MIN(i.planned_date), '%M %Y') AS Bulan,
-                GROUP_CONCAT(DISTINCT DAY(i.planned_date) ORDER BY i.planned_date SEPARATOR ', ') AS Rencana,
-                COALESCE(GROUP_CONCAT(DISTINCT DAY(i.realization_date) ORDER BY i.realization_date SEPARATOR ', '), '-') AS Realisasi,
-                COALESCE(
-                    SUBSTRING_INDEX(
-                        GROUP_CONCAT(
-                            DISTINCT CASE
-                                WHEN LOWER(doc.file) REGEXP '\\\\.(jpg|jpeg|png)$' THEN doc.file
-                                ELSE NULL
-                            END
-                            ORDER BY doc.created_at DESC SEPARATOR ','
-                        ),
-                        ',',
-                        1
-                    ),
-                    ''
-                ) AS `IMG Dokumentasi`,
-                COALESCE(u.firstname, '-') AS Petugas
-            FROM pl_periodic_items i
-            INNER JOIN pl_periodic_detail d ON d.id = i.detail_id
-            INNER JOIN ms_periodic p ON p.id = d.periodic_id
-            LEFT JOIN ms_area a ON a.id = d.area_id
-            LEFT JOIN users u ON u.id = d.worker_id
-            LEFT JOIN pl_documentation doc ON doc.periodic_item_id = i.id AND doc.is_active = '1'
-            WHERE i.is_active = '1'
-                AND d.is_active = '1'
-                AND i.planned_date BETWEEN :frdate AND :todate
-                AND COALESCE(a.nama_area, '') LIKE :area
-                AND COALESCE(u.firstname, '') LIKE :petugas
-            GROUP BY d.id, DATE_FORMAT(i.planned_date, '%Y-%m'), a.nama_area, p.job_description, d.periode, d.cycle, u.firstname
-            ORDER BY a.nama_area ASC, p.job_description ASC, MIN(i.planned_date) ASC"
+                q.Area,
+                q.Pekerjaan,
+                q.Periodik,
+                q.Bulan,
+                CONCAT('Week ', q.week_number) AS `Week`,
+                q.Rencana,
+                q.Realisasi,
+                COALESCE(q.`IMG Dokumentasi`, '') AS `IMG Dokumentasi`,
+                q.Petugas
+            FROM (
+                SELECT
+                    t.detail_id,
+                    t.period_key,
+                    t.week_number,
+                    t.Area,
+                    t.Pekerjaan,
+                    t.Periodik,
+                    DATE_FORMAT(MIN(t.planned_date), '%M %Y') AS Bulan,
+                    GROUP_CONCAT(DISTINCT DAY(t.planned_date) ORDER BY t.planned_date SEPARATOR ', ') AS Rencana,
+                    COALESCE(GROUP_CONCAT(DISTINCT DAY(t.realization_date) ORDER BY t.realization_date SEPARATOR ', '), '-') AS Realisasi,
+                    COALESCE(GROUP_CONCAT(DISTINCT t.doc_bundle SEPARATOR '||'), '') AS `IMG Dokumentasi`,
+                    COALESCE(t.Petugas, '-') AS Petugas
+                FROM (
+                    SELECT
+                        d.id AS detail_id,
+                        DATE_FORMAT(i.planned_date, '%Y-%m') AS period_key,
+                        CEIL(
+                            ROW_NUMBER() OVER (
+                                PARTITION BY d.id, DATE_FORMAT(i.planned_date, '%Y-%m')
+                                ORDER BY i.planned_date, i.id
+                            ) / NULLIF(d.cycle, 0)
+                        ) AS week_number,
+                        a.nama_area AS Area,
+                        p.job_description AS Pekerjaan,
+                        CONCAT(d.periode, ' / ', d.cycle, 'x') AS Periodik,
+                        i.planned_date,
+                        i.realization_date,
+                        COALESCE(u.firstname, '-') AS Petugas,
+                        (
+                            SELECT GROUP_CONCAT(
+                                CONCAT(COALESCE(DATE_FORMAT(i.realization_date, '%d-%m-%Y'), '-'), '@@', doc2.file)
+                                ORDER BY doc2.created_at ASC SEPARATOR '||'
+                            )
+                            FROM pl_documentation doc2
+                            WHERE doc2.periodic_item_id = i.id
+                                AND doc2.is_active = '1'
+                                AND LOWER(doc2.file) REGEXP '\\.(jpg|jpeg|png|webp|jfif|heic|heif)$'
+                        ) AS doc_bundle
+                    FROM pl_periodic_items i
+                    INNER JOIN pl_periodic_detail d ON d.id = i.detail_id
+                    INNER JOIN ms_periodic p ON p.id = d.periodic_id
+                    LEFT JOIN ms_area a ON a.id = d.area_id
+                    LEFT JOIN users u ON u.id = d.worker_id
+                    WHERE i.is_active = '1'
+                        AND d.is_active = '1'
+                        AND i.planned_date BETWEEN :frdate AND :todate
+                        AND COALESCE(a.nama_area, '') LIKE :area
+                        AND COALESCE(u.firstname, '') LIKE :petugas
+                ) t
+                GROUP BY t.detail_id, t.period_key, t.week_number, t.Area, t.Pekerjaan, t.Periodik, t.Petugas
+            ) q
+            ORDER BY q.Area ASC, q.Pekerjaan ASC, q.Bulan ASC, q.week_number ASC"
         ]);
 
         DB::table('sys_table')->insert([

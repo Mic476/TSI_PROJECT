@@ -376,8 +376,42 @@
                 const saveButton = document.getElementById('periodic-save');
                 const backButton = document.getElementById('periodic-back');
 
+                function reindexDetailRows() {
+                    if (!detailBody) {
+                        return;
+                    }
+
+                    const rows = Array.from(detailBody.querySelectorAll('tr'))
+                        .filter((row) => !row.querySelector('td[colspan]'));
+
+                    rows.forEach((row, index) => {
+                        const noCell = row.querySelector('td:nth-child(2)');
+                        if (noCell) {
+                            noCell.textContent = index + 1;
+                        }
+                    });
+                }
+
                 function setDirty(value = true) {
                     isDirty = value;
+                }
+
+                function showAlert({
+                    icon = 'warning',
+                    title = 'Perhatian',
+                    text = ''
+                }) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon,
+                            title,
+                            text,
+                            confirmButtonText: 'OK'
+                        });
+                        return;
+                    }
+
+                    alert(text || title);
                 }
 
                 function buildSelect(options, className, placeholder, value = '') {
@@ -452,7 +486,7 @@
                     `;
 
                     const cells = row.querySelectorAll('td');
-                    cells[1].textContent = detailBody.querySelectorAll('tr').length + 1;
+                    cells[1].textContent = '';
 
                     const areaSelect = buildSelect(areaOptions, 'area-select', 'Pilih Area');
                     const periodicSelect = buildSelect(periodicOptions, 'periodic-select', 'Pilih Pekerjaan');
@@ -499,10 +533,8 @@
                     cells[8].appendChild(realizationButton);
                     cells[9].appendChild(workerSelect);
 
-                    row.querySelector('.btn-delete-row').addEventListener('click', () => {
-                        row.remove();
-                        setDirty();
-                    });
+                    const deleteButton = row.querySelector('.btn-delete-row');
+                    deleteButton.addEventListener('click', () => handleDeleteRow(deleteButton));
 
                     periodicSelect.addEventListener('change', () => updateRowPeriodic(row));
                     
@@ -510,18 +542,40 @@
                         openPlanDatesModal(this);
                     });
 
+                    attachAutoPlanDateListeners(row);
+
                     detailBody.appendChild(row);
+                    reindexDetailRows();
                     setDirty();
                 }
 
-                function handleDeleteRow(button) {
+                async function handleDeleteRow(button) {
                     const row = button.closest('tr');
                     if (!row) {
+                        return;
+                    }
+
+                    const confirmation = typeof Swal !== 'undefined'
+                        ? await Swal.fire({
+                            title: 'Konfirmasi Hapus',
+                            text: 'Yakin ingin menghapus baris ini?',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Ya, Hapus',
+                            cancelButtonText: 'Batal',
+                            reverseButtons: true
+                        })
+                        : {
+                            isConfirmed: confirm('Yakin ingin menghapus baris ini?')
+                        };
+
+                    if (!confirmation.isConfirmed) {
                         return;
                     }
                     const detailId = row.dataset.id;
                     if (!detailId) {
                         row.remove();
+                        reindexDetailRows();
                         setDirty();
                         return;
                     }
@@ -543,13 +597,22 @@
                     .then((data) => {
                         if (data.success) {
                             row.remove();
+                            reindexDetailRows();
                         } else {
-                            alert(data.message || 'Gagal menghapus data.');
+                            showAlert({
+                                icon: 'error',
+                                title: 'Gagal',
+                                text: data.message || 'Gagal menghapus data.'
+                            });
                         }
                     })
                     .catch((error) => {
                         console.error(error);
-                        alert('Terjadi kesalahan saat menghapus data.');
+                        showAlert({
+                            icon: 'error',
+                            title: 'Terjadi Kesalahan',
+                            text: 'Terjadi kesalahan saat menghapus data.'
+                        });
                     });
                 }
 
@@ -589,6 +652,122 @@
 
                 let currentPlanDatesRow = null;
 
+                function parseIsoDate(isoDate) {
+                    if (!isoDate || typeof isoDate !== 'string') {
+                        return null;
+                    }
+                    const parts = isoDate.split('-').map((part) => parseInt(part, 10));
+                    if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+                        return null;
+                    }
+                    const [year, month, day] = parts;
+                    return new Date(year, month - 1, day);
+                }
+
+                function formatIsoDate(date) {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
+
+                function advanceOnePeriodDate(currentDate, periode) {
+                    const nextDate = new Date(currentDate);
+
+                    if (periode === 'mingguan') {
+                        nextDate.setDate(nextDate.getDate() + 7);
+                        return nextDate;
+                    }
+
+                    if (periode === 'bulanan') {
+                        nextDate.setMonth(nextDate.getMonth() + 1);
+                        return nextDate;
+                    }
+
+                    nextDate.setFullYear(nextDate.getFullYear() + 1);
+                    return nextDate;
+                }
+
+                function generatePlanDatesFromRow(row) {
+                    const cycle = parseInt(row.querySelector('.cycle-input')?.value, 10) || 0;
+                    const startPlanDate = row.querySelector('.start-plan-date-input')?.value || '';
+                    const periode = row.querySelector('.periode-select')?.value || '';
+
+                    if (cycle <= 0 || !startPlanDate || !periode) {
+                        return [];
+                    }
+
+                    const seedDate = parseIsoDate(startPlanDate);
+                    if (!seedDate || Number.isNaN(seedDate.getTime())) {
+                        return [];
+                    }
+
+                    const currentBlockStart = new Date(seedDate);
+                    const nextBlockStart = advanceOnePeriodDate(currentBlockStart, periode);
+                    const blockEnd = new Date(nextBlockStart);
+                    blockEnd.setDate(blockEnd.getDate() - 1);
+
+                    const diffMs = blockEnd.getTime() - currentBlockStart.getTime();
+                    const blockLengthInDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
+                    const generated = [];
+
+                    // Match backend logic: cycle is frequency within one period window.
+                    for (let index = 0; index < cycle; index++) {
+                        let offset = Math.floor((index * blockLengthInDays) / cycle);
+                        if (offset >= blockLengthInDays) {
+                            offset = blockLengthInDays - 1;
+                        }
+                        const candidate = new Date(currentBlockStart);
+                        candidate.setDate(candidate.getDate() + offset);
+                        generated.push(formatIsoDate(candidate));
+                    }
+
+                    return generated;
+                }
+
+                function setPlanDatesForRow(row, dates) {
+                    const planDatesData = row.querySelector('.plan-dates-data');
+                    if (planDatesData) {
+                        const nextValue = JSON.stringify(dates);
+                        const changed = planDatesData.value !== nextValue;
+                        planDatesData.value = nextValue;
+                        return changed;
+                    }
+                    return false;
+                }
+
+                function syncModalPlanDatesToRow() {
+                    if (!currentPlanDatesRow) {
+                        return;
+                    }
+                    const inputs = document.querySelectorAll('.plan-date-input-modal');
+                    const dates = Array.from(inputs).map((input) => input.value);
+                    const changed = setPlanDatesForRow(currentPlanDatesRow, dates);
+                    if (changed) {
+                        setDirty();
+                    }
+                }
+
+                function attachAutoPlanDateListeners(row) {
+                    const autoGenerateHandler = (markDirty = false) => {
+                        const generated = generatePlanDatesFromRow(row);
+                        if (generated.length > 0) {
+                            const changed = setPlanDatesForRow(row, generated);
+                            if (markDirty && changed) {
+                                setDirty();
+                            }
+                        }
+                    };
+
+                    row.querySelector('.cycle-input')?.addEventListener('input', () => autoGenerateHandler(true));
+                    row.querySelector('.start-plan-date-input')?.addEventListener('input', () => autoGenerateHandler(true));
+                    row.querySelector('.cycle-input')?.addEventListener('change', () => autoGenerateHandler(true));
+                    row.querySelector('.start-plan-date-input')?.addEventListener('change', () => autoGenerateHandler(true));
+                    row.querySelector('.periode-select')?.addEventListener('change', () => autoGenerateHandler(true));
+
+                    autoGenerateHandler(false);
+                }
+
                 function openPlanDatesModal(button) {
                     const row = button.closest('tr');
                     currentPlanDatesRow = row;
@@ -597,7 +776,11 @@
                     const cycle = parseInt(cycleInput?.value) || 0;
                     
                     if (cycle === 0) {
-                        alert('Cycle harus lebih dari 0');
+                        showAlert({
+                            icon: 'warning',
+                            title: 'Cycle Tidak Valid',
+                            text: 'Cycle harus lebih dari 0.'
+                        });
                         return;
                     }
 
@@ -607,6 +790,12 @@
                         existingDates = JSON.parse(planDatesData?.value || '[]');
                     } catch (e) {
                         existingDates = [];
+                    }
+
+                    const generatedDates = generatePlanDatesFromRow(row);
+                    if (existingDates.length === 0 && generatedDates.length > 0) {
+                        existingDates = generatedDates;
+                        setPlanDatesForRow(row, generatedDates);
                     }
 
                     const container = document.getElementById('planDatesInputContainer');
@@ -623,7 +812,9 @@
                         const input = document.createElement('input');
                         input.type = 'date';
                         input.className = 'form-control plan-date-input-modal';
-                        input.value = existingDates[i] || '';
+                        input.value = existingDates[i] || generatedDates[i] || '';
+                        input.addEventListener('input', syncModalPlanDatesToRow);
+                        input.addEventListener('change', syncModalPlanDatesToRow);
                         
                         formGroup.appendChild(label);
                         formGroup.appendChild(input);
@@ -637,19 +828,15 @@
                 document.getElementById('savePlanDates')?.addEventListener('click', function() {
                     if (!currentPlanDatesRow) return;
 
-                    const inputs = document.querySelectorAll('.plan-date-input-modal');
-                    const dates = Array.from(inputs).map(input => input.value);
-                    
-                    const planDatesData = currentPlanDatesRow.querySelector('.plan-dates-data');
-                    if (planDatesData) {
-                        planDatesData.value = JSON.stringify(dates);
-                    }
+                    syncModalPlanDatesToRow();
 
                     const modalElement = document.getElementById('planDatesModal');
                     const modalInstance = bootstrap.Modal.getInstance(modalElement);
                     modalInstance.hide();
-                    
-                    setDirty();
+                });
+
+                document.getElementById('planDatesModal')?.addEventListener('hidden.bs.modal', function() {
+                    syncModalPlanDatesToRow();
                     currentPlanDatesRow = null;
                 });
 
@@ -677,7 +864,7 @@
                             id: detailId,
                             periodic_id: periodicId,
                             area_id: areaId,
-                            worker_id: workerId || null,
+                            worker_id: workerId,
                             periode: periode,
                             cycle: cycle,
                             start_plan_date: startPlanDate || null,
@@ -689,19 +876,31 @@
                 function saveDetails() {
                     const details = collectDetails();
                     if (details.length === 0) {
-                        alert('Detail harus diisi minimal 1 baris.');
+                        showAlert({
+                            icon: 'warning',
+                            title: 'Data Belum Lengkap',
+                            text: 'Detail harus diisi minimal 1 baris.'
+                        });
                         return;
                     }
 
                     const headerYear = headerYearInput ? parseInt(headerYearInput.value, 10) : null;
                     if (!headerYear || Number.isNaN(headerYear)) {
-                        alert('Tahun tidak valid.');
+                        showAlert({
+                            icon: 'warning',
+                            title: 'Tahun Tidak Valid',
+                            text: 'Tahun tidak valid.'
+                        });
                         return;
                     }
 
-                    const invalid = details.find((item) => !item.periodic_id || !item.area_id || !item.periode || !item.cycle || !item.start_plan_date);
+                    const invalid = details.find((item) => !item.periodic_id || !item.area_id || !item.worker_id || !item.periode || !item.cycle || !item.start_plan_date);
                     if (invalid) {
-                        alert('Lengkapi data: Pekerjaan, Area, Periode, Cycle, dan Start Rencana.');
+                        showAlert({
+                            icon: 'warning',
+                            title: 'Lengkapi Data',
+                            text: 'Lengkapi data: Pekerjaan, Area, Petugas, Periode, Cycle, dan Start Rencana.'
+                        });
                         return;
                     }
 
@@ -728,12 +927,20 @@
                             setDirty(false);
                             location.reload();
                         } else {
-                            alert(data.message || 'Gagal menyimpan data.');
+                            showAlert({
+                                icon: 'error',
+                                title: 'Gagal Menyimpan',
+                                text: data.message || 'Gagal menyimpan data.'
+                            });
                         }
                     })
                     .catch((error) => {
                         console.error(error);
-                        alert('Terjadi kesalahan saat menyimpan data.');
+                        showAlert({
+                            icon: 'error',
+                            title: 'Terjadi Kesalahan',
+                            text: 'Terjadi kesalahan saat menyimpan data.'
+                        });
                     });
                 }
 
@@ -753,16 +960,40 @@
                     addRowButton.addEventListener('click', addDetailRow);
                 }
 
+                reindexDetailRows();
+
                 if (saveButton) {
                     saveButton.addEventListener('click', saveDetails);
                 }
 
                 if (backButton) {
-                    backButton.addEventListener('click', (event) => {
-                        if (isDirty && !confirm('Perubahan belum disimpan. Tetap keluar?')) {
-                            event.preventDefault();
+                    backButton.addEventListener('click', async (event) => {
+                        if (!isDirty) {
+                            history.back();
                             return;
                         }
+
+                        event.preventDefault();
+
+                        const confirmation = typeof Swal !== 'undefined'
+                            ? await Swal.fire({
+                                title: 'Perubahan Belum Disimpan',
+                                text: 'Tetap keluar dari halaman ini?',
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonText: 'Ya, Keluar',
+                                cancelButtonText: 'Batal',
+                                reverseButtons: true
+                            })
+                            : {
+                                isConfirmed: confirm('Perubahan belum disimpan. Tetap keluar?')
+                            };
+
+                        if (!confirmation.isConfirmed) {
+                            return;
+                        }
+
+                        window.removeEventListener('beforeunload', confirmLeave);
                         history.back();
                     });
                 }
@@ -787,7 +1018,11 @@
                             const row = event.target.closest('tr');
                             const detailId = event.target.dataset.detail || row?.dataset?.id;
                             if (!detailId) {
-                                alert('Simpan data terlebih dahulu untuk melihat detail realisasi.');
+                                showAlert({
+                                    icon: 'info',
+                                    title: 'Informasi',
+                                    text: 'Simpan data terlebih dahulu untuk melihat detail realisasi.'
+                                });
                                 return;
                             }
                             openDateModal(detailId, event.target.dataset.type);
@@ -797,6 +1032,11 @@
                         button.addEventListener('click', function(event) {
                             openPlanDatesModal(this);
                         });
+                    });
+                    detailBody.querySelectorAll('tr').forEach((row) => {
+                        if (!row.querySelector('td[colspan]')) {
+                            attachAutoPlanDateListeners(row);
+                        }
                     });
                 }
             </script>
@@ -811,7 +1051,7 @@
                             <button class="btn btn-secondary mb-0" onclick="history.back()"><i class="fas fa-circle-left me-1">
                                 </i><span class="font-weight-bold">Kembali</button>
                             {{-- check authorize edi --}}
-                            @if ($authorize->edit == '1')
+                            @if ($authorize->edit == '1' && !in_array(($dmenu ?? ''), ['trhrd', 'trreq'], true))
                                 {{-- check status active --}}
                                 @if ((int) ($list->is_active ?? $list->isactive ?? 1) == 1)
                                     {{-- button save --}}

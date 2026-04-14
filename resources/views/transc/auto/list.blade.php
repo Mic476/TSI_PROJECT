@@ -682,7 +682,7 @@
         <div class="modal fade" id="trreqVerifyModal" tabindex="-1" aria-labelledby="trreqVerifyModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
-                    <form method="POST" action="{{ route('work-schedule.verify') }}">
+                    <form method="POST" action="{{ route('work-schedule.verify') }}" enctype="multipart/form-data">
                         @csrf
                         <div class="modal-header">
                             <h5 class="modal-title" id="trreqVerifyModalLabel">Verifikasi Pekerjaan</h5>
@@ -694,6 +694,11 @@
                             <div class="mb-3">
                                 <label class="form-label" id="trreq-verify-notes-label">Catatan (opsional)</label>
                                 <textarea class="form-control" name="notes" id="trreq-verify-notes" rows="3" placeholder="Tulis catatan jika diperlukan"></textarea>
+                            </div>
+                            <div class="mb-3" id="trreq-verify-attachment-wrapper" style="display: none;">
+                                <label class="form-label" for="trreq-verify-attachments">Lampiran Revisi (opsional)</label>
+                                <input class="form-control" type="file" name="revision_attachments[]" id="trreq-verify-attachments" accept=".jpg,.jpeg,.png,.webp,.jfif,.heic,.heif,.pdf" multiple>
+                                <small class="text-muted">Format: JPG, PNG, WEBP, HEIC, PDF (maks 10MB/file)</small>
                             </div>
                             <div class="alert alert-info mb-0">
                                 <small>
@@ -792,6 +797,8 @@
                         const nonPeriodicIdInput = document.getElementById('trreq-verify-non-periodic-id');
                         const notesInput = document.getElementById('trreq-verify-notes');
                         const notesLabel = document.getElementById('trreq-verify-notes-label');
+                        const revisionAttachmentWrapper = document.getElementById('trreq-verify-attachment-wrapper');
+                        const revisionAttachmentInput = document.getElementById('trreq-verify-attachments');
 
                         if (action === 'approve') {
                             modalTitle.textContent = 'Setujui Pekerjaan';
@@ -800,6 +807,7 @@
                             decisionInput.value = 'approve';
                             if (notesLabel) notesLabel.textContent = 'Catatan (opsional)';
                             if (notesInput) notesInput.required = false;
+                            if (revisionAttachmentWrapper) revisionAttachmentWrapper.style.display = 'none';
                         } else {
                             modalTitle.textContent = 'Minta Revisi';
                             submitBtn.textContent = 'Minta Revisi';
@@ -807,10 +815,12 @@
                             decisionInput.value = 'reject';
                             if (notesLabel) notesLabel.textContent = 'Catatan (wajib diisi)';
                             if (notesInput) notesInput.required = true;
+                            if (revisionAttachmentWrapper) revisionAttachmentWrapper.style.display = '';
                         }
 
                         nonPeriodicIdInput.value = nonPeriodicId;
                         if (notesInput) notesInput.value = '';
+                        if (revisionAttachmentInput) revisionAttachmentInput.value = '';
                     });
                 }
             </script>
@@ -1079,16 +1089,23 @@
                                 @endphp
                                 <tr>
                                     <td class="text-center">
-                                        <button class="btn btn-primary btn-sm mb-0 px-3" type="button"
-                                            data-bs-toggle="modal" data-bs-target="#hrdApprovalModal"
-                                            data-id="{{ $primary }}"
-                                            data-status="{{ $rawStatus }}"
-                                            data-work-type="{{ $detail->work_type ?? '' }}"
-                                            data-vendor-name="{{ $detail->vendor_name ?? '' }}"
-                                            data-worker-id="{{ $detail->worker_id ?? '' }}"
-                                            data-note="{{ $detail->hrd_note ?? '' }}">
-                                            <i class="fas fa-check"></i><span class="font-weight-bold"> Proses</span>
-                                        </button>
+                                        <div class="btn-group" role="group" aria-label="Aksi approval HRD">
+                                            <button class="btn btn-info btn-sm mb-0 px-3 text-white" type="button"
+                                                title="Lihat Detail"
+                                                onclick="window.location='{{ url($url_menu . '/show' . '/' . encrypt($primary)) }}'">
+                                                <i class="fas fa-eye"></i><span class="font-weight-bold"> Detail</span>
+                                            </button>
+                                            <button class="btn btn-primary btn-sm mb-0 px-3" type="button"
+                                                data-bs-toggle="modal" data-bs-target="#hrdApprovalModal"
+                                                data-id="{{ $primary }}"
+                                                data-status="{{ $rawStatus }}"
+                                                data-work-type="{{ $detail->work_type ?? '' }}"
+                                                data-vendor-name="{{ $detail->vendor_name ?? '' }}"
+                                                data-worker-id="{{ $detail->worker_id ?? '' }}"
+                                                data-note="{{ $detail->hrd_note ?? '' }}">
+                                                <i class="fas fa-check"></i><span class="font-weight-bold"> Proses</span>
+                                            </button>
+                                        </div>
                                     </td>
                                     <td class="text-sm">{{ $loop->iteration }}</td>
                                     <td class="text-sm">{{ $displayDate }}</td>
@@ -1187,21 +1204,6 @@
                                                         <i class="fas fa-pen me-2 text-white"></i>Update
                                                     </button>
                                                 </li>
-                                                @if ($authorize->delete == '1')
-                                                    <li class="px-2">
-                                                        <form action="{{ url($url_menu . '/' . encrypt($primary)) }}"
-                                                            method="POST">
-                                                            @csrf
-                                                            @method('DELETE')
-                                                            <button type="submit"
-                                                                class="dropdown-item d-flex align-items-center gap-2 text-white rounded-2"
-                                                                style="background-color:#ff4d6d;border-color:#ff4d6d;"
-                                                                onclick="return deleteData(event, '{{ $primary }}','Non Aktifkan')">
-                                                                <i class="fas fa-random me-2 text-white"></i>Non Aktifkan
-                                                            </button>
-                                                        </form>
-                                                    </li>
-                                                @endif
                                             </ul>
                                         </div>
                                     </td>
@@ -1701,7 +1703,7 @@
                                                                 <li><hr class="dropdown-divider"></li>
                                                                 <li>
                                                                     <a class="dropdown-item text-danger" href="#" 
-                                                                       onclick="event.preventDefault(); if(confirm('Hapus data tahun {{ $header->tahun }}?')) { document.getElementById('delete-form-{{ $header->id }}').submit(); }">
+                                                                       onclick="confirmDeletePeriodicHeader(event, 'delete-form-{{ $header->id }}', '{{ $header->tahun }}')">
                                                                         <i class="fas fa-trash me-2"></i>Hapus
                                                                     </a>
                                                                 </li>
@@ -1734,6 +1736,41 @@
                 </div>
             </div>
         </div>
+
+        @push('js')
+            <script>
+                function confirmDeletePeriodicHeader(event, formId, tahun) {
+                    event.preventDefault();
+                    const submitDelete = () => {
+                        const form = document.getElementById(formId);
+                        if (form) {
+                            form.submit();
+                        }
+                    };
+
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: 'Konfirmasi Hapus',
+                            text: `Hapus data tahun ${tahun}?`,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Ya, Hapus',
+                            cancelButtonText: 'Batal',
+                            reverseButtons: true
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                submitDelete();
+                            }
+                        });
+                        return;
+                    }
+
+                    if (confirm(`Hapus data tahun ${tahun}?`)) {
+                        submitDelete();
+                    }
+                }
+            </script>
+        @endpush
 
     @elseif ($dmenu == 'trpetp')
         @push('css')
@@ -2286,6 +2323,38 @@
             }
 
             $nonPeriodicItems = $nonPeriodicItems->orderBy('pl_non_periodic.created_at', 'desc')->get();
+
+            // Parse attachment files from each item
+            $nonPeriodicItems = $nonPeriodicItems->map(function ($item) {
+                $attachments = [];
+                if (!empty($item->attachment)) {
+                    $rawAttachment = $item->attachment;
+                    // Try JSON decode first
+                    $decoded = json_decode($rawAttachment, true);
+                    if (is_array($decoded)) {
+                        $attachments = $decoded;
+                    } else {
+                        // Fallback: treat as comma-separated or single path
+                        $parts = array_map('trim', explode(',', $rawAttachment));
+                        $attachments = array_filter($parts);
+                    }
+                }
+
+                $revisionAttachments = [];
+                if (!empty($item->revision_attachment)) {
+                    $rawRevisionAttachment = $item->revision_attachment;
+                    $decodedRevision = json_decode($rawRevisionAttachment, true);
+                    if (is_array($decodedRevision)) {
+                        $revisionAttachments = $decodedRevision;
+                    } else {
+                        $partsRevision = array_map('trim', explode(',', $rawRevisionAttachment));
+                        $revisionAttachments = array_filter($partsRevision);
+                    }
+                }
+                $item->attachments = array_values($attachments);
+                $item->revision_attachments = array_values($revisionAttachments);
+                return $item;
+            });
         @endphp
         <div class="container-fluid py-4 pu-wrap">
             <div class="pu-hero">
@@ -2332,13 +2401,25 @@
                                 @endphp
                                 <tr>
                                     <td class="text-center">
-                                        <button class="btn btn-primary btn-sm mb-0 px-3" type="button"
-                                            data-bs-toggle="modal" data-bs-target="#petugasCompleteModal"
-                                            data-non-periodic-id="{{ $detail->id }}"
-                                            data-description="{{ $detail->job_description ?? $detail->description ?? '' }}"
-                                            onclick="document.getElementById('petugas-non-periodic-id').value='{{ $detail->id }}'; document.getElementById('petugas-job-description').value='{{ addslashes($detail->job_description ?? $detail->description ?? '') }}';">
-                                            <i class="fas fa-check"></i><span class="font-weight-bold"> Selesai</span>
-                                        </button>
+                                        <div class="btn-group" role="group" aria-label="Aksi Pekerjaan">
+                                            <button class="btn btn-info btn-sm mb-0 px-3" type="button"
+                                                data-bs-toggle="modal" data-bs-target="#petugasDetailModal"
+                                                data-tanggal="{{ $displayDate }}"
+                                                data-area="{{ $detail->area_name ?? $detail->area ?? $detail->area_id ?? '-' }}"
+                                                data-deskripsi="{{ $detail->job_description ?? $detail->description ?? '-' }}"
+                                                data-attachments="{{ json_encode($detail->attachments ?? []) }}"
+                                                data-revision-attachments="{{ json_encode($detail->revision_attachments ?? []) }}"
+                                                data-catatan="{{ data_get($detail, 'requester_note') ?? '-' }}">
+                                                <i class="fas fa-eye"></i><span class="font-weight-bold"> Detail</span>
+                                            </button>
+                                            <button class="btn btn-primary btn-sm mb-0 px-3" type="button"
+                                                data-bs-toggle="modal" data-bs-target="#petugasCompleteModal"
+                                                data-non-periodic-id="{{ $detail->id }}"
+                                                data-description="{{ $detail->job_description ?? $detail->description ?? '' }}"
+                                                onclick="document.getElementById('petugas-non-periodic-id').value='{{ $detail->id }}'; document.getElementById('petugas-job-description').value='{{ addslashes($detail->job_description ?? $detail->description ?? '') }}';">
+                                                <i class="fas fa-check"></i><span class="font-weight-bold"> Selesai</span>
+                                            </button>
+                                        </div>
                                     </td>
                                     <td class="text-sm">{{ $loop->iteration }}</td>
                                     <td class="text-sm">{{ $displayDate }}</td>
@@ -2352,8 +2433,11 @@
                                         @endif
                                     </td>
                                     <td class="text-sm">
-                                        @if($status === 'revisi' && !empty($detail->hrd_note))
-                                            <small class="text-muted">{{ $detail->hrd_note }}</small>
+                                        @php
+                                            $requesterNote = data_get($detail, 'requester_note');
+                                        @endphp
+                                        @if($status === 'revisi' && !empty($requesterNote))
+                                            <small class="text-muted">{{ $requesterNote }}</small>
                                         @else
                                             <span class="text-muted">-</span>
                                         @endif
@@ -2414,6 +2498,70 @@
                 </div>
             </div>
         </div>
+        <div class="modal fade" id="petugasDetailModal" tabindex="-1" aria-labelledby="petugasDetailLabel"
+            aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="petugasDetailLabel">Detail Pengajuan</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-2">
+                            <label class="form-label text-xs text-uppercase mb-1">Tanggal Pengajuan</label>
+                            <input type="text" class="form-control" id="petugas-detail-tanggal" readonly>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label text-xs text-uppercase mb-1">Area</label>
+                            <input type="text" class="form-control" id="petugas-detail-area" readonly>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label text-xs text-uppercase mb-1">Deskripsi</label>
+                            <textarea class="form-control" id="petugas-detail-deskripsi" rows="3" readonly></textarea>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label text-xs text-uppercase mb-1">Lampiran Pengajuan</label>
+                            <div id="petugas-detail-attachments" class="d-flex flex-wrap gap-2" style="max-height: 300px; overflow-y: auto;">
+                                <p class="text-muted text-sm mb-0">Tidak ada lampiran.</p>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label text-xs text-uppercase mb-1">Lampiran Revisi</label>
+                            <div id="petugas-detail-revision-attachments" class="d-flex flex-wrap gap-2" style="max-height: 300px; overflow-y: auto;">
+                                <p class="text-muted text-sm mb-0">Tidak ada lampiran revisi.</p>
+                            </div>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label text-xs text-uppercase mb-1">Catatan Revisi</label>
+                            <textarea class="form-control" id="petugas-detail-catatan" rows="3" readonly></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Image Preview Modal -->
+        <div class="modal fade" id="previewImageModal" tabindex="-1" aria-labelledby="previewImageLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="previewImageLabel">Preview Lampiran</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body text-center" style="background-color: #f8f9fa;">
+                        <img id="previewImage" src="" alt="Preview" style="max-width: 100%; max-height: 500px; border-radius: 4px;">
+                    </div>
+                    <div class="modal-footer">
+                        <a id="downloadImageBtn" href="" download class="btn btn-primary">
+                            <i class="fas fa-download"></i> Download
+                        </a>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                    </div>
+                </div>
+            </div>
+        </div>
         @push('js')
             <script>
                 const petugasCompleteModal = document.getElementById('petugasCompleteModal');
@@ -2428,6 +2576,84 @@
 
                         if (inputNonPeriodic) inputNonPeriodic.value = nonPeriodicId;
                         if (inputDesc) inputDesc.value = description;
+                    });
+                }
+
+                const petugasDetailModal = document.getElementById('petugasDetailModal');
+                if (petugasDetailModal) {
+                    petugasDetailModal.addEventListener('show.bs.modal', function(event) {
+                        const button = event.relatedTarget;
+                        const tanggal = button.getAttribute('data-tanggal') || '-';
+                        const area = button.getAttribute('data-area') || '-';
+                        const deskripsi = button.getAttribute('data-deskripsi') || '-';
+                        const attachmentsJson = button.getAttribute('data-attachments') || '[]';
+                        const revisionAttachmentsJson = button.getAttribute('data-revision-attachments') || '[]';
+                        const catatan = button.getAttribute('data-catatan') || '-';
+
+                        const inputTanggal = document.getElementById('petugas-detail-tanggal');
+                        const inputArea = document.getElementById('petugas-detail-area');
+                        const inputDeskripsi = document.getElementById('petugas-detail-deskripsi');
+                        const inputAttachments = document.getElementById('petugas-detail-attachments');
+                        const inputRevisionAttachments = document.getElementById('petugas-detail-revision-attachments');
+                        const inputCatatan = document.getElementById('petugas-detail-catatan');
+
+                        if (inputTanggal) inputTanggal.value = tanggal;
+                        if (inputArea) inputArea.value = area;
+                        if (inputDeskripsi) inputDeskripsi.value = deskripsi;
+                        if (inputCatatan) inputCatatan.value = catatan;
+
+                        const renderAttachmentFiles = function(container, filesJson, emptyMessage) {
+                            if (!container) {
+                                return;
+                            }
+                            try {
+                                const files = JSON.parse(filesJson || '[]');
+                                container.innerHTML = '';
+
+                                if (files.length === 0) {
+                                    container.innerHTML = '<p class="text-muted text-sm mb-0">' + emptyMessage + '</p>';
+                                } else {
+                                    files.forEach(function(file) {
+                                        const fileUrl = '/storage/' + file;
+                                        const isImage = /\.(jpg|jpeg|png|gif|webp|jfif|heic|heif)$/i.test(file);
+                                        const isPdf = /\.pdf$/i.test(file);
+
+                                        if (isImage) {
+                                            const img = document.createElement('img');
+                                            img.src = fileUrl;
+                                            img.alt = 'Lampiran';
+                                            img.style.cssText = 'max-width: 150px; max-height: 150px; border-radius: 4px; border: 1px solid #e9ecef; cursor: pointer;';
+                                            img.onclick = function() {
+                                                // Show preview modal
+                                                const previewImg = document.getElementById('previewImage');
+                                                const downloadBtn = document.getElementById('downloadImageBtn');
+                                                if (previewImg) previewImg.src = fileUrl;
+                                                if (downloadBtn) {
+                                                    downloadBtn.href = fileUrl;
+                                                    downloadBtn.download = file.split('/').pop();
+                                                }
+                                                const previewModal = new bootstrap.Modal(document.getElementById('previewImageModal'));
+                                                previewModal.show();
+                                            };
+                                            container.appendChild(img);
+                                        } else if (isPdf) {
+                                            const pdfLink = document.createElement('a');
+                                            pdfLink.href = fileUrl;
+                                            pdfLink.target = '_blank';
+                                            pdfLink.className = 'badge bg-danger';
+                                            pdfLink.textContent = '📄 ' + file.split('/').pop();
+                                            pdfLink.style.cssText = 'display: inline-block; padding: 6px 8px; cursor: pointer;';
+                                            container.appendChild(pdfLink);
+                                        }
+                                    });
+                                }
+                            } catch (e) {
+                                container.innerHTML = '<p class="text-muted text-sm mb-0">' + emptyMessage + '</p>';
+                            }
+                        };
+
+                        renderAttachmentFiles(inputAttachments, attachmentsJson, 'Tidak ada lampiran.');
+                        renderAttachmentFiles(inputRevisionAttachments, revisionAttachmentsJson, 'Tidak ada lampiran revisi.');
                     });
                 }
             </script>

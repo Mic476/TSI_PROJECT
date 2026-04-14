@@ -140,10 +140,14 @@ class WorkScheduleController extends Controller
                 'periodic_item_id' => 'nullable|integer|exists:pl_periodic_items,id',
                 'decision' => 'required|in:approve,reject',
                 'notes' => ($request->input('decision') === 'reject' ? 'required' : 'nullable') . '|string|max:500',
+                'revision_attachments' => 'nullable|array',
+                'revision_attachments.*' => 'file|mimes:jpg,jpeg,png,webp,jfif,heic,heif,pdf|max:10240',
             ],
             [
                 'required' => ':attribute tidak boleh kosong',
                 'in' => ':attribute tidak valid',
+                'mimes' => ':attribute harus berupa file jpg, jpeg, png, webp, jfif, heic, heif, atau pdf',
+                'max' => ':attribute maksimal :max',
             ]
         );
 
@@ -190,6 +194,10 @@ class WorkScheduleController extends Controller
                         $nonPeriodicUpdate['pengerjaan_ended_at'] = now();
                     }
 
+                    if (!empty($attributes['notes'])) {
+                        $nonPeriodicUpdate['requester_note'] = $attributes['notes'];
+                    }
+
                     DB::table('pl_non_periodic')
                         ->where('id', $itemId)
                         ->update($nonPeriodicUpdate);
@@ -209,10 +217,25 @@ class WorkScheduleController extends Controller
                 } else {
                     // Non-periodic: User reject - kembali ke petugas untuk revisi
                     // Bersihkan petugas_confirmed_at agar petugas bisa konfirmasi ulang
+                    $revisionAttachments = [];
+                    $revisionAttachmentInput = $request->file('revision_attachments', []);
+                    if ($revisionAttachmentInput instanceof UploadedFile) {
+                        $revisionAttachmentInput = [$revisionAttachmentInput];
+                    }
+                    if (is_array($revisionAttachmentInput)) {
+                        foreach ($revisionAttachmentInput as $revisionAttachmentFile) {
+                            if ($revisionAttachmentFile instanceof UploadedFile) {
+                                $revisionAttachments[] = $revisionAttachmentFile->store('pl_revision_attachment', 'public');
+                            }
+                        }
+                    }
+
                     DB::table('pl_non_periodic')
                         ->where('id', $itemId)
                         ->update([
                             'request_status' => 'revisi',
+                            'requester_note' => $attributes['notes'] ?? null,
+                            'revision_attachment' => !empty($revisionAttachments) ? json_encode($revisionAttachments) : null,
                             'petugas_confirmed_at' => null,
                             'pengerjaan_ended_at' => null,
                             'updated_at' => now(),
@@ -404,7 +427,7 @@ class WorkScheduleController extends Controller
             'periodic_id' => 'required|integer|exists:ms_periodic,id',
             'plan_dates' => 'required|array|min:1',
             'plan_dates.*' => 'required|date',
-            'worker_id' => 'nullable|integer|exists:users,id',
+            'worker_id' => 'required|integer|exists:users,id',
         ]);
 
         $periodic = DB::table('ms_periodic')->where('id', $attributes['periodic_id'])->first();
@@ -429,7 +452,7 @@ class WorkScheduleController extends Controller
                     'periodic_id' => $attributes['periodic_id'],
                     'cycle_number' => $i + 1, // cycle_number starts from 1
                     'plan_date' => $planDates[$i] ?? null,
-                    'worker_id' => $attributes['worker_id'] ?? null,
+                    'worker_id' => $attributes['worker_id'],
                     'job_status' => 'scheduled',
                     'is_active' => '1',
                     'created_at' => now(),
@@ -492,7 +515,7 @@ class WorkScheduleController extends Controller
             'details.*.id' => 'nullable|integer|exists:pl_periodic_detail,id',
             'details.*.periodic_id' => 'required|integer|exists:ms_periodic,id',
             'details.*.area_id' => 'required|integer|exists:ms_area,id',
-            'details.*.worker_id' => 'nullable|integer|exists:users,id',
+            'details.*.worker_id' => 'required|integer|exists:users,id',
             'details.*.periode' => ['required', Rule::in(['mingguan', 'bulanan', 'tahunan'])],
             'details.*.cycle' => 'required|integer|min:1',
             'details.*.start_plan_date' => 'nullable|date',
@@ -694,20 +717,14 @@ class WorkScheduleController extends Controller
             'detail_id' => 'required|integer|exists:pl_periodic_detail,id',
         ]);
 
-        $username = session('username') ?? 'system';
-
         try {
             DB::table('pl_periodic_detail')
                 ->where('id', $attributes['detail_id'])
-                ->update([
-                    'is_active' => '0',
-                    'updated_at' => now(),
-                    'user_update' => $username,
-                ]);
+                ->delete();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Detail berhasil dihapus.',
+                'message' => 'Detail berhasil dihapus permanen.',
             ]);
         } catch (\Throwable $e) {
             return response()->json([

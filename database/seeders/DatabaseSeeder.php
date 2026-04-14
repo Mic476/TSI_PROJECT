@@ -297,8 +297,19 @@ class DatabaseSeeder extends Seeder
         ]);
         DB::table('sys_dmenu')->insert([
             'gmenu' => 'transc',
-            'dmenu' => 'trpetp',
+            'dmenu' => 'trdper',
             'urut' => 4,
+            'name' => 'Daftar Periodic HRD',
+            'url' => 'daftar-periodic-hrd',
+            'icon' => 'ni-calendar-grid-58',
+            'tabel' => 'ms_periodic',
+            'layout' => 'transc',
+            'isactive' => '1'
+        ]);
+        DB::table('sys_dmenu')->insert([
+            'gmenu' => 'transc',
+            'dmenu' => 'trpetp',
+            'urut' => 5,
             'name' => 'Pekerjaan Periodic',
             'url' => 'pekerjaan-periodic',
             'icon' => 'ni-calendar-grid-58',
@@ -308,7 +319,7 @@ class DatabaseSeeder extends Seeder
         DB::table('sys_dmenu')->insert([
             'gmenu' => 'transc',
             'dmenu' => 'trpetn',
-            'urut' => 5,
+            'urut' => 6,
             'name' => 'Pekerjaan Non-Periodic',
             'url' => 'pekerjaan-nonperiodic',
             'icon' => 'ni-bullet-list-67',
@@ -318,23 +329,12 @@ class DatabaseSeeder extends Seeder
         DB::table('sys_dmenu')->insert([
             'gmenu' => 'transc',
             'dmenu' => 'trpetd',
-            'urut' => 6,
+            'urut' => 7,
             'name' => 'Pekerjaan Daily',
             'url' => 'pekerjaan-daily',
             'icon' => 'ni-check-bold',
             'tabel' => 'ms_daily',
             'layout' => 'transc'
-        ]);
-        DB::table('sys_dmenu')->insert([
-            'gmenu' => 'transc',
-            'dmenu' => 'trdper',
-            'urut' => 7,
-            'name' => 'Daftar Periodic HRD',
-            'url' => 'daftar-periodic-hrd',
-            'icon' => 'ni-calendar-grid-58',
-            'tabel' => 'ms_periodic',
-            'layout' => 'transc',
-            'isactive' => '1'
         ]);
         DB::table('sys_dmenu')->insert([
             'gmenu' => 'master',
@@ -544,6 +544,14 @@ class DatabaseSeeder extends Seeder
             'add' => '1',
             'edit' => '1',
             'delete' => '1'
+        ]);
+        DB::table('sys_auth')->insert([
+            'idroles' => 'admins',
+            'gmenu' => 'report',
+            'dmenu' => 'rpmelh',
+            'add' => '1',
+            'edit' => '0',
+            'delete' => '0'
         ]);
         DB::table('sys_auth')->insert([
             'idroles' => 'usersx',

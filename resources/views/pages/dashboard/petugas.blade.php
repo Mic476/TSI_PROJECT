@@ -27,7 +27,7 @@
                 <div class="card border-left-warning">
                     <div class="card-body">
                         <h6 class="text-xs text-uppercase mb-1">Daily</h6>
-                        <h3 class="mb-0">{{ $non_periodic_count }}</h3>
+                        <h3 class="mb-0">{{ $daily_count ?? 0 }}</h3>
                     </div>
                 </div>
             </div>

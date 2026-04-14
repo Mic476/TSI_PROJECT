@@ -19,6 +19,11 @@
             color: #1e40af;
         }
 
+        .status-draft {
+            background: rgba(100, 116, 139, 0.2);
+            color: #334155;
+        }
+
         .status-review {
             background: rgba(20, 184, 166, 0.18);
             color: #0f766e;
@@ -578,6 +583,7 @@
                                 <label for="user-status-filter" class="text-sm mb-0">Filter Status</label>
                                 <select id="user-status-filter" class="form-select form-select-sm" style="width: 180px;">
                                     <option value="">Semua</option>
+                                    <option value="draft">Draft</option>
                                     <option value="pending">Pending</option>
                                     <option value="review">Review</option>
                                     <option value="pengadaan">Pengadaan</option>
@@ -643,14 +649,34 @@
                                                             <span class="visually-hidden">Toggle Dropdown</span>
                                                         </button>
                                                         <ul class="dropdown-menu dropdown-menu-end">
-                                                            <li class="px-2">
-                                                                <button type="button"
-                                                                    class="dropdown-item d-flex align-items-center gap-2 text-white rounded-2"
-                                                                    style="background-color:#ff6b47;border-color:#ff6b47;"
-                                                                    onclick="window.location='{{ url($url_menu . '/edit' . '/' . encrypt($primary)) }}'">
-                                                                    <i class="fas fa-edit me-2 text-white"></i>Edit
-                                                                </button>
-                                                            </li>
+                                                            @if ($status === 'draft')
+                                                                <li class="px-2">
+                                                                    <button type="button"
+                                                                        class="dropdown-item d-flex align-items-center gap-2 text-white rounded-2"
+                                                                        style="background-color:#ff6b47;border-color:#ff6b47;"
+                                                                        onclick="window.location='{{ url($url_menu . '/edit' . '/' . encrypt($primary)) }}'">
+                                                                        <i class="fas fa-edit me-2 text-white"></i>Edit Draft
+                                                                    </button>
+                                                                </li>
+                                                                <li class="px-2 mt-1">
+                                                                    <form method="POST" action="{{ route('user.draft.confirm') }}" class="m-0 draft-confirm-form">
+                                                                        @csrf
+                                                                        <input type="hidden" name="id_encrypt" value="{{ encrypt($detail->id ?? $primary) }}">
+                                                                        <button type="submit" class="dropdown-item d-flex align-items-center gap-2 text-white rounded-2" style="background-color:#0ea5a5;border-color:#0ea5a5;">
+                                                                            <i class="fas fa-paper-plane me-2 text-white"></i>Konfirmasi Draft
+                                                                        </button>
+                                                                    </form>
+                                                                </li>
+                                                                <li class="px-2 mt-1">
+                                                                    <form method="POST" action="{{ route('user.draft.delete') }}" class="m-0 draft-delete-form">
+                                                                        @csrf
+                                                                        <input type="hidden" name="id_encrypt" value="{{ encrypt($detail->id ?? $primary) }}">
+                                                                        <button type="submit" class="dropdown-item d-flex align-items-center gap-2 text-white rounded-2" style="background-color:#ef4444;border-color:#ef4444;">
+                                                                            <i class="fas fa-trash me-2 text-white"></i>Hapus Draft
+                                                                        </button>
+                                                                    </form>
+                                                                </li>
+                                                            @endif
                                                         </ul>
                                                     @endif
                                                 </div>
@@ -699,7 +725,7 @@
         <div class="modal fade" id="verifyModal" tabindex="-1" aria-labelledby="verifyModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
-                    <form method="POST" action="{{ route('work-schedule.verify') }}">
+                    <form method="POST" action="{{ route('work-schedule.verify') }}" enctype="multipart/form-data">
                         @csrf
                         <div class="modal-header">
                             <h5 class="modal-title" id="verifyModalLabel">Verifikasi Pekerjaan</h5>
@@ -711,6 +737,11 @@
                             <div class="mb-3">
                                 <label class="form-label" id="verify-notes-label">Catatan (opsional)</label>
                                 <textarea class="form-control" name="notes" id="verify-notes" rows="3" placeholder="Tulis catatan jika diperlukan"></textarea>
+                            </div>
+                            <div class="mb-3" id="verify-attachment-wrapper" style="display: none;">
+                                <label class="form-label" for="verify-attachments">Lampiran Revisi (opsional)</label>
+                                <input class="form-control" type="file" name="revision_attachments[]" id="verify-attachments" accept=".jpg,.jpeg,.png,.webp,.jfif,.heic,.heif,.pdf" multiple>
+                                <small class="text-muted">Format: JPG, PNG, WEBP, HEIC, PDF (maks 10MB/file)</small>
                             </div>
                             <div class="alert alert-info mb-0">
                                 <small>
@@ -784,28 +815,71 @@
                     const decisionInput = document.getElementById('verify-decision');
                     const nonPeriodicIdInput = document.getElementById('verify-non-periodic-id');
                     const notesInput = document.getElementById('verify-notes');
-                                        const notesLabel = document.getElementById('verify-notes-label');
+                    const notesLabel = document.getElementById('verify-notes-label');
+                    const revisionAttachmentWrapper = document.getElementById('verify-attachment-wrapper');
+                    const revisionAttachmentInput = document.getElementById('verify-attachments');
                     
                     if (action === 'approve') {
                         modalTitle.textContent = 'Setujui Pekerjaan';
                         submitBtn.textContent = 'Setujui';
                         submitBtn.className = 'btn btn-success';
                         decisionInput.value = 'approve';
-                                            if (notesLabel) notesLabel.textContent = 'Catatan (opsional)';
-                                            if (notesInput) notesInput.required = false;
+                        if (notesLabel) notesLabel.textContent = 'Catatan (opsional)';
+                        if (notesInput) notesInput.required = false;
+                        if (revisionAttachmentWrapper) revisionAttachmentWrapper.style.display = 'none';
                     } else {
                         modalTitle.textContent = 'Minta Revisi';
                         submitBtn.textContent = 'Minta Revisi';
                         submitBtn.className = 'btn btn-warning';
                         decisionInput.value = 'reject';
-                                            if (notesLabel) notesLabel.textContent = 'Catatan (wajib diisi)';
-                                            if (notesInput) notesInput.required = true;
+                        if (notesLabel) notesLabel.textContent = 'Catatan (wajib diisi)';
+                        if (notesInput) notesInput.required = true;
+                        if (revisionAttachmentWrapper) revisionAttachmentWrapper.style.display = '';
                     }
                     
                     nonPeriodicIdInput.value = nonPeriodicId;
-                    notesInput.value = '';
+                    if (notesInput) notesInput.value = '';
+                    if (revisionAttachmentInput) revisionAttachmentInput.value = '';
                 });
             }
+
+            document.querySelectorAll('.draft-confirm-form').forEach(function(form) {
+                form.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    Swal.fire({
+                        title: 'Konfirmasi Draft?',
+                        text: 'Setelah dikonfirmasi, pengajuan akan masuk ke alur approval dan tidak bisa dihapus sebagai draft.',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, Konfirmasi',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#0ea5a5'
+                    }).then(function(result) {
+                        if (result.isConfirmed) {
+                            form.submit();
+                        }
+                    });
+                });
+            });
+
+            document.querySelectorAll('.draft-delete-form').forEach(function(form) {
+                form.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    Swal.fire({
+                        title: 'Hapus Draft?',
+                        text: 'Draft yang dihapus tidak dapat dikembalikan.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, Hapus',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#ef4444'
+                    }).then(function(result) {
+                        if (result.isConfirmed) {
+                            form.submit();
+                        }
+                    });
+                });
+            });
         </script>
     @endpush
 @endsection

@@ -47,6 +47,8 @@ return new class extends Migration
             $table->unsignedBigInteger('hrd_approval_id')->nullable();
             $table->text('hrd_note')->nullable();
             $table->date('hrd_approval_date')->nullable();
+            $table->text('requester_note')->nullable();
+            $table->text('revision_attachment')->nullable();
             $table->dateTime('pengadaan_started_at')->nullable();
             $table->dateTime('pengadaan_ended_at')->nullable();
             $table->dateTime('pengerjaan_started_at')->nullable();

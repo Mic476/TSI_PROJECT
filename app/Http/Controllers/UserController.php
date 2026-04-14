@@ -21,7 +21,11 @@ class UserController extends TranscController
 	public function show($data)
 	{
 		$id = $this->resolveId($data['idencrypt'] ?? null);
-		$data['list'] = DB::table('pl_non_periodic')->where('id', $id)->first();
+		$data['list'] = DB::table('pl_non_periodic')
+			->leftJoin('ms_area', 'pl_non_periodic.area_id', '=', 'ms_area.id')
+			->select('pl_non_periodic.*', 'ms_area.nama_area')
+			->where('pl_non_periodic.id', $id)
+			->first();
 
 		if (!$data['list']) {
 			Session::flash('class', 'danger');
@@ -37,7 +41,11 @@ class UserController extends TranscController
 	public function edit($data)
 	{
 		$id = $this->resolveId($data['idencrypt'] ?? null);
-		$data['list'] = DB::table('pl_non_periodic')->where('id', $id)->first();
+		$data['list'] = DB::table('pl_non_periodic')
+			->leftJoin('ms_area', 'pl_non_periodic.area_id', '=', 'ms_area.id')
+			->select('pl_non_periodic.*', 'ms_area.nama_area')
+			->where('pl_non_periodic.id', $id)
+			->first();
 
 		if (!$data['list']) {
 			Session::flash('class', 'danger');
@@ -93,14 +101,23 @@ class UserController extends TranscController
 				'area_id' => 'required|string|max:50',
 				'requester_name' => 'required|string|max:100',
 				'job_description' => 'required|string',
-				'attachment' => 'nullable',
+				'attachment' => 'required|array|min:1',
 				'attachment.*' => 'file|mimes:jpeg,png,jpg,gif,webp,jfif,heic,heif,pdf|max:10240',
 				'request_status' => 'nullable|string|max:20',
 			],
 			[
 				'required' => ':attribute tidak boleh kosong',
 				'max' => ':attribute maksimal :max karakter',
+				'min' => ':attribute minimal :min file',
+				'attachment.required' => 'Lampiran wajib diisi.',
 				'attachment.*.mimes' => 'Format lampiran tidak didukung. Gunakan JPG, PNG, GIF, WEBP, JFIF, HEIC, HEIF, atau PDF.',
+			],
+			[
+				'area_id' => 'Area',
+				'requester_name' => 'Nama Pengaju',
+				'job_description' => 'Deskripsi Pekerjaan',
+				'attachment' => 'Lampiran',
+				'attachment.*' => 'Lampiran',
 			]
 		);
 
@@ -115,14 +132,9 @@ class UserController extends TranscController
 		}
 
 		$attributes['request_status'] = $isHrdSubmitter ? 'review' : ($attributes['request_status'] ?? 'pending');
+		$attributes['request_status'] = 'draft';
 		$attributes['user_id'] = $currentUser->id ?? null;
 		$attributes['user_create'] = $currentUsername;
-
-		if ($isHrdSubmitter) {
-			$attributes['head_approval_date'] = now()->toDateString();
-			$attributes['head_note'] = 'Auto skip head approval: submitted by HRD';
-			$attributes['head_approver_id'] = $currentUser->id ?? null;
-		}
 
 		$attributes['created_at'] = now();
 		$attributes['updated_at'] = now();
@@ -143,7 +155,7 @@ class UserController extends TranscController
 		}
 
 		Session::flash('class', 'success');
-		Session::flash('message', 'Pengajuan berhasil disimpan.');
+		Session::flash('message', 'Pengajuan berhasil disimpan sebagai draft. Klik konfirmasi untuk mengirim approval.');
 
 		return redirect($data['url_menu']);
 	}
@@ -157,19 +169,17 @@ class UserController extends TranscController
 			Session::flash('message', 'Data pengajuan tidak ditemukan.');
 			return redirect($data['url_menu']);
 		}
+
+		if (strtolower((string) ($current->request_status ?? '')) !== 'draft') {
+			Session::flash('class', 'danger');
+			Session::flash('message', 'Hanya draft yang dapat diubah.');
+			return redirect($data['url_menu']);
+		}
 		$attributes = request()->validate(
 			[
 				'area_id' => 'required|string|max:50',
 				'requester_name' => 'required|string|max:100',
-				'work_category' => 'required|string|max:50',
-				'work_type' => 'required|string|max:20',
-				'priority' => 'required|string|max:20',
-				'vendor_name' => 'nullable|string|max:100',
-				'location_detail' => 'nullable|string|max:150',
-				'target_date' => 'nullable|date',
 				'job_description' => 'required|string',
-				'contact_name' => 'nullable|string|max:100',
-				'contact_phone' => 'nullable|string|max:30',
 				'attachment' => 'nullable',
 				'attachment.*' => 'file|mimes:jpeg,png,jpg,gif,webp,jfif,heic,heif,pdf|max:10240',
 				'request_status' => 'nullable|string|max:20',
@@ -178,6 +188,13 @@ class UserController extends TranscController
 				'required' => ':attribute tidak boleh kosong',
 				'max' => ':attribute maksimal :max karakter',
 				'attachment.*.mimes' => 'Format lampiran tidak didukung. Gunakan JPG, PNG, GIF, WEBP, JFIF, HEIC, HEIF, atau PDF.',
+			],
+			[
+				'area_id' => 'Area',
+				'requester_name' => 'Nama Pengaju',
+				'job_description' => 'Deskripsi Pekerjaan',
+				'attachment' => 'Lampiran',
+				'attachment.*' => 'Lampiran',
 			]
 		);
 
@@ -195,6 +212,7 @@ class UserController extends TranscController
 		}
 
 		$attributes['request_status'] = $attributes['request_status'] ?? ($current->request_status ?? 'pending');
+		$attributes['request_status'] = 'draft';
 		$attributes['updated_at'] = now();
 
 		$updated = DB::table('pl_non_periodic')->where('id', $id)->update($attributes);
@@ -206,9 +224,132 @@ class UserController extends TranscController
 		}
 
 		Session::flash('class', 'success');
-		Session::flash('message', 'Pengajuan berhasil diperbarui.');
+		Session::flash('message', 'Draft pengajuan berhasil diperbarui.');
 
 		return redirect($data['url_menu']);
+	}
+
+	public function confirmDraft()
+	{
+		$attributes = request()->validate([
+			'id_encrypt' => 'required|string',
+		]);
+
+		$id = $this->resolveId($attributes['id_encrypt']);
+		$current = DB::table('pl_non_periodic')->where('id', $id)->first();
+		if (!$current) {
+			Session::flash('class', 'danger');
+			Session::flash('message', 'Draft tidak ditemukan.');
+			return redirect()->back();
+		}
+
+		$currentStatus = strtolower((string) ($current->request_status ?? ''));
+		if ($currentStatus !== 'draft') {
+			Session::flash('class', 'danger');
+			Session::flash('message', 'Data ini bukan draft atau sudah dikonfirmasi.');
+			return redirect()->back();
+		}
+
+		$sessionIdentity = trim((string) (session('username') ?? ''));
+		$authUser = auth()->user();
+		$authId = $authUser->id ?? null;
+		$authUsername = trim((string) ($authUser->username ?? ''));
+		$currentUser = null;
+
+		if ($sessionIdentity !== '' && !is_numeric($sessionIdentity)) {
+			$currentUser = DB::table('users')
+				->whereRaw('LOWER(username) = ?', [strtolower($sessionIdentity)])
+				->first();
+		}
+
+		if (!$currentUser && $authId) {
+			$currentUser = DB::table('users')->where('id', $authId)->first();
+		}
+
+		if (!$currentUser && $authUsername !== '' && !is_numeric($authUsername)) {
+			$currentUser = DB::table('users')
+				->whereRaw('LOWER(username) = ?', [strtolower($authUsername)])
+				->first();
+		}
+
+		if (!$currentUser && $sessionIdentity !== '' && is_numeric($sessionIdentity)) {
+			$currentUser = DB::table('users')->where('id', (int) $sessionIdentity)->first();
+		}
+
+		$currentUserId = (int) ($currentUser->id ?? 0);
+		$currentUsername = strtolower(trim((string) ($currentUser->username ?? $sessionIdentity ?? $authUsername ?? '')));
+		$currentRoles = $currentUser ? array_map('trim', explode(',', strtolower((string) ($currentUser->idroles ?? '')))) : [];
+		$isAdmin = in_array('admins', $currentRoles, true) || in_array('admin', $currentRoles, true);
+		$isOwnerById = $currentUserId > 0 && (int) ($current->user_id ?? 0) === $currentUserId;
+		$isOwnerByUsername = $currentUsername !== '' && strtolower((string) ($current->user_create ?? '')) === $currentUsername;
+
+		if (!$isAdmin && !$isOwnerById && !$isOwnerByUsername) {
+			Session::flash('class', 'danger');
+			Session::flash('message', 'Anda tidak memiliki akses untuk mengonfirmasi draft ini.');
+			return redirect()->back();
+		}
+
+		$isHrdSubmitter = in_array('hrdxxx', $currentRoles, true) || in_array('hrd', $currentRoles, true);
+		$updatePayload = [
+			'request_status' => $isHrdSubmitter ? 'review' : 'pending',
+			'updated_at' => now(),
+			'user_update' => $currentUser->username ?? null,
+		];
+
+		if ($isHrdSubmitter) {
+			$updatePayload['head_approval_date'] = now()->toDateString();
+			$updatePayload['head_note'] = 'Auto skip head approval: submitted by HRD';
+			$updatePayload['head_approver_id'] = $currentUser->id ?? null;
+		}
+
+		DB::table('pl_non_periodic')->where('id', $id)->update($updatePayload);
+
+		Session::flash('class', 'success');
+		Session::flash('message', 'Draft berhasil dikonfirmasi dan dikirim untuk proses approval.');
+
+		return redirect()->back();
+	}
+
+	public function deleteDraft()
+	{
+		$attributes = request()->validate([
+			'id_encrypt' => 'required|string',
+		]);
+
+		$id = $this->resolveId($attributes['id_encrypt']);
+		$current = DB::table('pl_non_periodic')->where('id', $id)->first();
+		if (!$current) {
+			Session::flash('class', 'danger');
+			Session::flash('message', 'Draft tidak ditemukan.');
+			return redirect()->back();
+		}
+
+		if (strtolower((string) ($current->request_status ?? '')) !== 'draft') {
+			Session::flash('class', 'danger');
+			Session::flash('message', 'Hanya draft yang dapat dihapus.');
+			return redirect()->back();
+		}
+
+		$sessionIdentity = trim((string) (session('username') ?? ''));
+		$authUser = auth()->user();
+		$currentUsername = strtolower(trim((string) ($authUser->username ?? $sessionIdentity)));
+		$currentRoles = array_map('trim', explode(',', strtolower((string) ($authUser->idroles ?? ''))));
+		$isAdmin = in_array('admins', $currentRoles, true) || in_array('admin', $currentRoles, true);
+		$isOwnerById = $authUser && (int) ($current->user_id ?? 0) === (int) $authUser->id;
+		$isOwnerByUsername = $currentUsername !== '' && strtolower((string) ($current->user_create ?? '')) === $currentUsername;
+
+		if (!$isAdmin && !$isOwnerById && !$isOwnerByUsername) {
+			Session::flash('class', 'danger');
+			Session::flash('message', 'Anda tidak memiliki akses untuk menghapus draft ini.');
+			return redirect()->back();
+		}
+
+		DB::table('pl_non_periodic')->where('id', $id)->delete();
+
+		Session::flash('class', 'success');
+		Session::flash('message', 'Draft berhasil dihapus.');
+
+		return redirect()->back();
 	}
 
 	private function resolveId($encryptedId)

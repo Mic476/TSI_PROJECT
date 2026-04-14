@@ -677,14 +677,10 @@ class TranscController extends Controller
             // Delete related details first
             DB::table('pl_periodic_detail')->where('header_id', $header->id)->delete();
             
-            // Delete header (soft delete by setting is_active to 0)
+            // Delete header permanently (hard delete)
             $deleteData = DB::table('pl_periodic_header')
                 ->where('tahun', $tahun)
-                ->update([
-                    'is_active' => '0',
-                    'user_update' => session('username'),
-                    'updated_at' => now()
-                ]);
+                ->delete();
             
             if ($deleteData) {
                 $syslog->log_insert('D', $data['dmenu'], 'Deleted Periodic HRD: ' . $tahun, '1');

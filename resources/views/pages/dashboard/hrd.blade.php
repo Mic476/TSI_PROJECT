@@ -64,16 +64,19 @@
                                 ->where('is_active', 1)
                                 ->count();
 
-                            $todayLogs = \Illuminate\Support\Facades\DB::table('rp_daily_log')
-                                ->where('work_date', \Illuminate\Support\Carbon::today()->toDateString())
-                                ->count();
+                            $todayLoggedTasks = \Illuminate\Support\Facades\DB::table('rp_daily_log')
+                                ->whereDate('work_date', \Illuminate\Support\Carbon::today()->toDateString())
+                                ->distinct()
+                                ->count('daily_task_id');
 
                             $todayCompleted = \Illuminate\Support\Facades\DB::table('rp_daily_log')
-                                ->where('work_date', \Illuminate\Support\Carbon::today()->toDateString())
-                                ->where('job_status', 'completed')
-                                ->count();
+                                ->whereDate('work_date', \Illuminate\Support\Carbon::today()->toDateString())
+                                ->whereRaw('LOWER(COALESCE(job_status, \'\')) = ?', ['completed'])
+                                ->distinct()
+                                ->count('daily_task_id');
 
-                            $completionRate = $todayLogs > 0 ? round(($todayCompleted / $todayLogs) * 100) : 0;
+                            $dailyTarget = $totalDailyTasks;
+                            $completionRate = $dailyTarget > 0 ? round(($todayCompleted / $dailyTarget) * 100) : 0;
 
                             // 4. AREA & WORKERS
                             $totalAreas = \Illuminate\Support\Facades\DB::table('ms_area')->count();
@@ -226,8 +229,11 @@
                                             </div>
                                         </div>
                                         <p class="text-sm text-muted mb-0">
-                                            <strong>{{ $todayCompleted }}</strong> dari <strong>{{ $todayLogs }}</strong> input hari ini
+                                            <strong>{{ $todayCompleted }}</strong> dari <strong>{{ $dailyTarget }}</strong> task hari ini
                                         </p>
+                                        @if ($todayLoggedTasks < $dailyTarget)
+                                            <p class="text-xs text-muted mb-0 mt-1">{{ $todayLoggedTasks }} task sudah diinput hari ini</p>
+                                        @endif
                                     </div>
                                 </div>
                             </div>

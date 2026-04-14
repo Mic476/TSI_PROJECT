@@ -15,7 +15,7 @@
                             {{-- button save --}}
                             <button class="btn btn-primary mb-0"
                                 onclick="event.preventDefault(); document.getElementById('{{ $dmenu }}-form').submit();"><i
-                                    class="fas fa-floppy-disk me-1"> </i><span class="font-weight-bold">Simpan</span></button>
+                                    class="fas fa-floppy-disk me-1"> </i><span class="font-weight-bold">Simpan Draft</span></button>
                         @endif
                     </div>
                 </div>
@@ -74,18 +74,18 @@
                                         $isHrdSubmitter = str_contains($normalizedRoles, ',hrdxxx,') || str_contains($normalizedRoles, ',hrd,');
                                     @endphp
                                     <p class="text-xs text-secondary mt-2 mb-0">
-                                        {{ $isHrdSubmitter ? 'Status awal otomatis: review (langsung ke approval HRD, tanpa head approval).' : 'Status awal otomatis: pending.' }}
+                                        Status awal: draft. Pengajuan bisa diedit/hapus dulu, lalu dikonfirmasi dari halaman list untuk memulai approval.
                                     </p>
                                 </div>
                             </div>
                             <div class="row mt-3">
                                 <div class="col-12">
-                                    <label class="form-control-label">Lampiran (Opsional, bisa lebih dari 1)</label>
-                                    <input class="form-control" name="attachment[]" type="file" accept="image/*,.pdf" multiple>
-                                    <p class="text-xs text-secondary mt-2 mb-0">Upload foto kondisi atau dokumen pendukung (multi file).</p>
+                                    <label class="form-control-label">Lampiran <span class="text-danger">*</span> (bisa lebih dari 1)</label>
+                                    <input class="form-control" name="attachment[]" type="file" accept="image/*,.pdf" multiple required>
+                                    <p class="text-xs text-secondary mt-2 mb-0">Upload foto kondisi atau dokumen pendukung (minimal 1 file).</p>
                                 </div>
                             </div>
-                            <input type="hidden" name="request_status" value="pending">
+                            <input type="hidden" name="request_status" value="draft">
                             <hr class="horizontal dark">
                         </div>
                         <div class="card-footer align-items-center pt-0 pb-2">

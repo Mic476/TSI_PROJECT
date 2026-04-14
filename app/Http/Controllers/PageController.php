@@ -468,6 +468,30 @@ class PageController extends Controller
             ->limit(20)
             ->get();
 
+        // Keep Daily KPI consistent with Pekerjaan Daily transaction source,
+        // and show remaining (unchecked) tasks for today.
+        $dailyTaskBaseQuery = DB::table('ms_daily')
+            ->where('is_active', '1');
+
+        if (!empty($activeRole)) {
+            $dailyTaskBaseQuery->where('assigned_role', $activeRole);
+        }
+
+        $dailyTaskIds = (clone $dailyTaskBaseQuery)->pluck('id');
+        $dailyTaskTotal = $dailyTaskIds->count();
+
+        $dailyCompletedToday = 0;
+        if ($dailyTaskTotal > 0) {
+            $dailyCompletedToday = DB::table('rp_daily_log')
+                ->whereDate('work_date', now()->toDateString())
+                ->whereIn('daily_task_id', $dailyTaskIds)
+                ->whereRaw('LOWER(COALESCE(job_status, "")) = ?', ['completed'])
+                ->distinct('daily_task_id')
+                ->count('daily_task_id');
+        }
+
+        $data['daily_count'] = max(0, $dailyTaskTotal - $dailyCompletedToday);
+
         $data['non_periodic_count'] = (clone $nonPeriodicBaseQuery)->count();
         $data['periodic_count'] = (clone $periodicBaseQuery)->count();
         $data['total_tasks'] = $data['non_periodic_count'] + $data['periodic_count'];

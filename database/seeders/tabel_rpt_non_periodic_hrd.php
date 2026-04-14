@@ -22,7 +22,7 @@ class tabel_rpt_non_periodic_hrd extends Seeder
             'type' => 'report',
             'query' => "SELECT
                 DATE_FORMAT(np.created_at, '%d-%m-%Y') AS `Tanggal Pengajuan`,
-                COALESCE(np.area_id, '-') AS Area,
+                COALESCE(a.nama_area, np.area_id, '-') AS Area,
                 COALESCE(np.job_description, '-') AS Pekerjaan,
                 CASE
                     WHEN np.pengadaan_started_at IS NOT NULL AND np.pengadaan_ended_at IS NOT NULL THEN
@@ -48,28 +48,28 @@ class tabel_rpt_non_periodic_hrd extends Seeder
                 END AS `Waktu Pengerjaan`,
                 COALESCE(CONCAT(worker.firstname, ' ', worker.lastname), '-') AS Petugas,
                 COALESCE(
-                    SUBSTRING_INDEX(
-                        GROUP_CONCAT(
-                            DISTINCT CASE
-                                WHEN LOWER(doc.file) REGEXP '\\\\.(jpg|jpeg|png)$' THEN doc.file
-                                ELSE NULL
-                            END
-                            ORDER BY doc.created_at DESC SEPARATOR ','
-                        ),
-                        ',',
-                        1
+                    GROUP_CONCAT(
+                        DISTINCT CASE
+                            WHEN LOWER(doc.file) REGEXP '\\.(jpg|jpeg|png|webp|jfif)$' THEN doc.file
+                            ELSE NULL
+                        END
+                        ORDER BY doc.created_at DESC SEPARATOR '|'
                     ),
                     ''
                 ) AS `IMG Dokumentasi`
             FROM pl_non_periodic np
+            LEFT JOIN ms_area a ON a.id = CASE
+                WHEN np.area_id REGEXP '^[0-9]+$' THEN CAST(np.area_id AS UNSIGNED)
+                ELSE NULL
+            END
             LEFT JOIN users worker ON worker.id = np.worker_id
             LEFT JOIN pl_documentation doc ON doc.non_periodic_id = np.id AND doc.is_active = '1'
             WHERE (np.is_active = '1' OR np.is_active IS NULL)
                 AND DATE(np.created_at) BETWEEN :frdate AND :todate
-                AND COALESCE(np.area_id, '') LIKE :area
+                AND COALESCE(a.nama_area, np.area_id, '') LIKE :area
                 AND LOWER(COALESCE(np.request_status, '')) LIKE :status
                 AND LOWER(COALESCE(worker.firstname, '')) LIKE :petugas
-            GROUP BY np.id, np.created_at, np.area_id, np.job_description, np.request_status,
+            GROUP BY np.id, np.created_at, np.area_id, a.nama_area, np.job_description, np.request_status,
                 np.pengadaan_started_at, np.pengadaan_ended_at, np.pengerjaan_started_at, np.pengerjaan_ended_at,
                 worker.firstname, worker.lastname, np.hrd_note
             ORDER BY np.created_at DESC"
@@ -97,12 +97,10 @@ class tabel_rpt_non_periodic_hrd extends Seeder
             'length' => '100',
             'validate' => 'max:100',
             'filter' => '1',
-            'query' => "SELECT DISTINCT area_id AS value, area_id AS name
-                FROM pl_non_periodic
-                WHERE (is_active = '1' OR is_active IS NULL)
-                    AND area_id IS NOT NULL
-                    AND area_id <> ''
-                ORDER BY area_id"
+            'query' => "SELECT nama_area AS value, nama_area AS name
+                FROM ms_area
+                WHERE is_active = '1'
+                ORDER BY nama_area"
         ]);
 
         DB::table('sys_table')->insert([
