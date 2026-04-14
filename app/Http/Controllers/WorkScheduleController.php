@@ -667,12 +667,22 @@ class WorkScheduleController extends Controller
             }
 
             $blockLengthInDays = max(1, $currentBlockStart->diffInDays($blockEnd) + 1);
+            $remainingDaysInThisWeek = ((Carbon::SUNDAY - $currentBlockStart->dayOfWeek + 7) % 7) + 1;
+            $shouldKeepSameWeek = $periode === 'mingguan' && $frequency <= $remainingDaysInThisWeek;
 
             // cycle is treated as frequency within one period window.
             for ($index = 0; $index < $frequency; $index++) {
-                $offset = (int) floor(($index * $blockLengthInDays) / $frequency);
-                if ($offset >= $blockLengthInDays) {
-                    $offset = $blockLengthInDays - 1;
+                if ($shouldKeepSameWeek) {
+                    // Keep dates in the same week and spread them across remaining days.
+                    $offset = (int) floor(($index * $remainingDaysInThisWeek) / $frequency);
+                    if ($offset >= $remainingDaysInThisWeek) {
+                        $offset = $remainingDaysInThisWeek - 1;
+                    }
+                } else {
+                    $offset = (int) floor(($index * $blockLengthInDays) / $frequency);
+                    if ($offset >= $blockLengthInDays) {
+                        $offset = $blockLengthInDays - 1;
+                    }
                 }
 
                 $candidate = $currentBlockStart->copy()->addDays($offset);

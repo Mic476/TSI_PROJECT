@@ -80,6 +80,15 @@
                 .plan-dates-container .plan-date-input {
                     font-size: 0.85rem;
                 }
+
+                .periodic-note {
+                    border-left: 4px solid #f59e0b;
+                    background: #fffbeb;
+                    color: #92400e;
+                    border-radius: 10px;
+                    padding: 10px 12px;
+                    font-size: 0.85rem;
+                }
             </style>
         @php
             $selectedYear = (int) $idencrypt;
@@ -204,6 +213,9 @@
                             <label class="form-label">Keterangan</label>
                             <input type="text" class="form-control" id="periodic-keterangan" value="{{ $keterangan }}" readonly>
                         </div>
+                    </div>
+                    <div class="periodic-note mb-3">
+                        Note: Tanggal rencana disarankan input di awal minggu <strong>Senin - Rabu</strong>.
                     </div>
                     <div class="table-responsive">
                         <table class="table periodic-table align-items-center mb-0">
@@ -711,12 +723,28 @@
                     const blockLengthInDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
                     const generated = [];
 
+                    const dayOfWeek = currentBlockStart.getDay(); // 0: Minggu, 1: Senin, ...
+                    const remainingDaysInThisWeek = ((7 - dayOfWeek) % 7) + 1;
+                    const shouldKeepSameWeek =
+                        periode === 'mingguan' &&
+                        cycle <= remainingDaysInThisWeek;
+
                     // Match backend logic: cycle is frequency within one period window.
                     for (let index = 0; index < cycle; index++) {
-                        let offset = Math.floor((index * blockLengthInDays) / cycle);
-                        if (offset >= blockLengthInDays) {
-                            offset = blockLengthInDays - 1;
+                        let offset = 0;
+                        if (shouldKeepSameWeek) {
+                            // Keep dates in the same week and spread them across remaining days.
+                            offset = Math.floor((index * remainingDaysInThisWeek) / cycle);
+                            if (offset >= remainingDaysInThisWeek) {
+                                offset = remainingDaysInThisWeek - 1;
+                            }
+                        } else {
+                            offset = Math.floor((index * blockLengthInDays) / cycle);
+                            if (offset >= blockLengthInDays) {
+                                offset = blockLengthInDays - 1;
+                            }
                         }
+
                         const candidate = new Date(currentBlockStart);
                         candidate.setDate(candidate.getDate() + offset);
                         generated.push(formatIsoDate(candidate));
@@ -925,7 +953,19 @@
                     .then((data) => {
                         if (data.success) {
                             setDirty(false);
-                            location.reload();
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Berhasil',
+                                    text: data.message || 'Data berhasil tersimpan.',
+                                    confirmButtonText: 'OK'
+                                }).then(() => {
+                                    location.reload();
+                                });
+                            } else {
+                                alert(data.message || 'Data berhasil tersimpan.');
+                                location.reload();
+                            }
                         } else {
                             showAlert({
                                 icon: 'error',

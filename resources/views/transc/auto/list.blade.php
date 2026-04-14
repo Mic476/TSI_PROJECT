@@ -2355,6 +2355,34 @@
                 $item->revision_attachments = array_values($revisionAttachments);
                 return $item;
             });
+
+            $getPelaksanaLabel = function ($item) {
+                $workType = strtolower(trim((string) ($item->work_type ?? '')));
+
+                if ($workType === 'internal') {
+                    return 'Internal';
+                }
+
+                if ($workType === 'vendor') {
+                    return 'Vendor';
+                }
+
+                return '-';
+            };
+
+            $getPelaksanaClass = function ($item) {
+                $workType = strtolower(trim((string) ($item->work_type ?? '')));
+
+                if ($workType === 'internal') {
+                    return 'background-color:#1d4ed8;color:#ffffff;';
+                }
+
+                if ($workType === 'vendor') {
+                    return 'background-color:#f59e0b;color:#ffffff;';
+                }
+
+                return 'background-color:#6b7280;color:#ffffff;';
+            };
         @endphp
         <div class="container-fluid py-4 pu-wrap">
             <div class="pu-hero">
@@ -2378,6 +2406,7 @@
                                 <th class="text-uppercase text-xs">Tanggal Pengajuan</th>
                                 <th class="text-uppercase text-xs">Area</th>
                                 <th class="text-uppercase text-xs">Deskripsi</th>
+                                <th class="text-uppercase text-xs">Pelaksana</th>
                                 <th class="text-uppercase text-xs">Status</th>
                                 <th class="text-uppercase text-xs">Catatan Revisi</th>
                             </tr>
@@ -2426,6 +2455,11 @@
                                     <td class="text-sm">{{ $detail->area_name ?? $detail->area ?? $detail->area_id ?? '-' }}</td>
                                     <td class="text-sm">{{ $detail->job_description ?? $detail->description ?? '-' }}</td>
                                     <td class="text-sm">
+                                        <span class="badge" style="{{ $getPelaksanaClass($detail) }}">
+                                            {{ $getPelaksanaLabel($detail) }}
+                                        </span>
+                                    </td>
+                                    <td class="text-sm">
                                         @if($status === 'revisi')
                                             <span class="badge bg-warning">Revisi</span>
                                         @else
@@ -2445,7 +2479,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="pu-empty">Belum ada pekerjaan non-periodic.</td>
+                                    <td colspan="8" class="pu-empty">Belum ada pekerjaan non-periodic.</td>
                                 </tr>
                             @endforelse
                         </tbody>

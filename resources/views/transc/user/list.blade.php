@@ -229,6 +229,20 @@
             };
             
             // Jika kosong, query langsung dari database
+
+                        $getPelaksanaLabel = function ($item) {
+                            $workType = strtolower(trim((string) ($item->work_type ?? '')));
+
+                            if ($workType === 'vendor') {
+                                return 'Vendor';
+                            }
+
+                            if ($workType === 'internal') {
+                                return 'Internal';
+                            }
+
+                            return '-';
+                        };
             if ($displayItems->isEmpty()) {
                 $displayItems = \Illuminate\Support\Facades\DB::table('pl_non_periodic')
                     ->leftJoin('ms_area', 'pl_non_periodic.area_id', '=', 'ms_area.id')
@@ -402,6 +416,7 @@
                                         <th>Tanggal Pengajuan</th>
                                         <th>Area</th>
                                         <th>Deskripsi</th>
+                                        <th>Pelaksana</th>
                                         <th>Dokumentasi</th>
                                     </tr>
                                 </thead>
@@ -463,6 +478,9 @@
                                             </td>
                                             <td>
                                                 <span class="text-xs">{{ Str::limit($detail->job_description ?? $detail->description ?? '-', 50) }}</span>
+                                            </td>
+                                            <td>
+                                                <span class="text-xs font-weight-bold">{{ $getPelaksanaLabel($detail) }}</span>
                                             </td>
                                             <td class="text-center">
                                                 @if($allDocs->count() > 0)
@@ -563,7 +581,7 @@
                                                 @endif
                                             </td>
                                         </tr>
-                                    @endforeach
+                                            <td colspan="7" class="text-center text-secondary py-4">Belum ada pekerjaan yang perlu diverifikasi.</td>
                                 </tbody>
                             </table>
                         </div>
@@ -605,6 +623,7 @@
                                     <th>Tanggal Pengajuan</th>
                                     <th>Area</th>
                                     <th>Deskripsi</th>
+                                    <th>Pelaksana</th>
                                     <th>Status</th>
                                     <th>Catatan Head</th>
                                     <th>Catatan HRD</th>
@@ -693,6 +712,9 @@
                                             {{ $detail->job_description ?? $detail->description ?? '-' }}
                                         </td>
                                         <td class="text-sm">
+                                            {{ $getPelaksanaLabel($detail) }}
+                                        </td>
+                                        <td class="text-sm">
                                             <span class="{{ $badgeClass }}">{{ $status ?: '-' }}</span>
                                         </td>
                                         <td class="text-sm">
@@ -704,7 +726,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8" class="text-center text-sm text-secondary">Belum ada pengajuan.</td>
+                                        <td colspan="9" class="text-center text-sm text-secondary">Belum ada pengajuan.</td>
                                     </tr>
                                 @endforelse
                             </tbody>

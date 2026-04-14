@@ -570,14 +570,6 @@ class DatabaseSeeder extends Seeder
             'delete' => '1'
         ]);
         DB::table('sys_auth')->insert([
-            'idroles' => 'usersx',
-            'gmenu' => 'transc',
-            'dmenu' => 'trreq',
-            'add' => '0',
-            'edit' => '0',
-            'delete' => '0'
-        ]);
-        DB::table('sys_auth')->insert([
             'idroles' => 'headxx',
             'gmenu' => 'transc',
             'dmenu' => 'trreq',

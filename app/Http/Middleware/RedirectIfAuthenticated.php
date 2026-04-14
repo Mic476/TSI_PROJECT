@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Providers\RouteServiceProvider;
+use App\Services\Auth\HomeRedirectService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -10,6 +10,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RedirectIfAuthenticated
 {
+    public function __construct(private readonly HomeRedirectService $homeRedirectService)
+    {
+    }
+
     /**
      * Handle an incoming request.
      *
@@ -21,7 +25,9 @@ class RedirectIfAuthenticated
 
         foreach ($guards as $guard) {
             if (Auth::guard($guard)->check()) {
-                return redirect(RouteServiceProvider::HOME);
+                $path = $this->homeRedirectService->resolveHomePath(Auth::guard($guard)->user());
+
+                return redirect('/' . ltrim($path, '/'));
             }
         }
 

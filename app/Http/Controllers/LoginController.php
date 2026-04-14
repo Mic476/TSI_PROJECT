@@ -21,6 +21,15 @@ class LoginController extends Controller
         return $this->homeRedirectService->resolveHomePath(auth()->user());
     }
 
+    private function shouldForceRoleHome(): bool
+    {
+        $roles = auth()->check()
+            ? ',' . str_replace(' ', '', strtolower((string) auth()->user()->idroles)) . ','
+            : '';
+
+        return str_contains($roles, ',headxx,') || str_contains($roles, ',head,');
+    }
+
     /**
      * Display login page.
      */
@@ -45,6 +54,10 @@ class LoginController extends Controller
             //insert sys_log
             $syslog->log_insert('L', 'login', 'Login Sukses', '1');
             // page dashboard
+            if ($this->shouldForceRoleHome()) {
+                return redirect($this->defaultHomePath());
+            }
+
             return redirect()->intended($this->defaultHomePath());
         } elseif (Auth::attempt(['username' => $request->username, 'password' => $request->password, 'isactive' => '0'])) {
             Auth::logout();
@@ -112,6 +125,10 @@ class LoginController extends Controller
             //insert sys_log
             $syslog->log_insert('L', 'login', 'Login Sukses', '1');
             // page dashboard
+            if ($this->shouldForceRoleHome()) {
+                return redirect($this->defaultHomePath());
+            }
+
             return redirect()->intended($this->defaultHomePath());
         } elseif (Auth::attempt(['username' => $token[0], 'password' => openssl_decrypt(str_replace(['-', '_', '@'], ['+', '/', '='], $token[1]), env('ALG'), env('KEY'), 0, env('SCR')), 'isactive' => '0'])) {
             Auth::logout();
